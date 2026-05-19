@@ -1,0 +1,160 @@
+﻿# Turbine Dynamics Daemon - PowerShell Native
+# RegimeOS v4.1-Windows | Phase 3 (Engine-Always-Running Model)
+
+$coreRpmPath = "C:\RegimeOS\core_geodisc\velocity\rpm.md"
+$mainRpmPath = "C:\RegimeOS\turbine_main\rotor\velocity\rpm.md"
+$subBasePath = "C:\RegimeOS\turbine_sub"
+$inboxPath = "C:\RegimeOS\adams_sierpinski\inbox\"
+
+# ENGINE CONSTANTS - IDLE + LOAD MODEL
+$idleCoreRpm = 15         # Core idle speed (always maintained)
+$idleMainRpm = 9          # Main idle speed (60% of Core)
+$idleSubRpm = 5           # Sub idle speed (60% of Main)
+
+$maxCoreRpm = 2000
+$maxMainRpm = 1000
+$maxSubRpm = 500
+
+$impulseBoostCore = 5     # +5 RPM per impulse
+$impulseBoostMain = 3     # +3 RPM per impulse
+$impulseBoostSub = 2      # +2 RPM per impulse
+
+$decayRate = 0.05         # 5% decay per cycle (gentle)
+$recoveryRate = 0.30      # 30% recovery toward idle per cycle
+
+function Initialize-RPM {
+    param($path, $initialValue, $maxValue)
+    if (!(Test-Path $path)) {
+        $dir = Split-Path $path -Parent
+        if (!(Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        "$initialValue / $maxValue" | Out-File -FilePath $path -Encoding UTF8
+    }
+}
+
+function Initialize-SubTurbines {
+    for ($i = 1; $i -le 16; $i++) {
+        $path = "$subBasePath\sub_turbine_$('{0:D2}' -f $i)\velocity\rpm.md"
+        Initialize-RPM $path $idleSubRpm $maxSubRpm
+    }
+}
+
+# Initialize at IDLE (not 0)
+Initialize-RPM $coreRpmPath $idleCoreRpm $maxCoreRpm
+Initialize-RPM $mainRpmPath $idleMainRpm $maxMainRpm
+Initialize-SubTurbines
+
+function Get-RPM {
+    param($path)
+    if (!(Test-Path $path)) { return 0 }
+    $content = Get-Content $path -Raw
+    ($content -split ' / ')[0] -as [int]
+}
+
+function Set-RPM {
+    param($path, $value, $max)
+    "$value / $max" | Out-File -FilePath $path -Encoding UTF8
+}
+
+function Get-SubTurbine-Avg {
+    $total = 0
+    $count = 0
+    for ($i = 1; $i -le 16; $i++) {
+        $path = "$subBasePath\sub_turbine_$('{0:D2}' -f $i)\velocity\rpm.md"
+        if (Test-Path $path) {
+            $total += Get-RPM $path
+            $count++
+        }
+    }
+    if ($count -eq 0) { return 0 }
+    return [Math]::Floor($total / $count)
+}
+
+function Set-All-SubTurbines {
+    param($targetRpm)
+    for ($i = 1; $i -le 16; $i++) {
+        $path = "$subBasePath\sub_turbine_$('{0:D2}' -f $i)\velocity\rpm.md"
+        $current = Get-RPM $path
+        # Smooth transition toward target
+        $newRpm = [Math]::Floor($current + ($targetRpm - $current) * 0.5)
+        Set-RPM $path $newRpm $maxSubRpm
+    }
+}
+
+Write-Host "╔════════════════════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "║  Turbine Dynamics - ENGINE ALWAYS RUNNING      ║" -ForegroundColor Cyan
+Write-Host "╠════════════════════════════════════════════════╣" -ForegroundColor Cyan
+Write-Host "║  Idle Core:        $idleCoreRpm RPM (baseline)                 ║" -ForegroundColor Green
+Write-Host "║  Idle Main:        $idleMainRpm RPM (60% of Core)              ║" -ForegroundColor Green
+Write-Host "║  Idle Sub:         $idleSubRpm RPM (60% of Main)               ║" -ForegroundColor Green
+Write-Host "║  Sub-Turbines:     16 units synchronized       ║" -ForegroundColor Green
+Write-Host "║  Impulse Boost:    +5/+3/+2 per impulse        ║" -ForegroundColor Green
+Write-Host "║  Status:           RUNNING                     ║" -ForegroundColor Green
+Write-Host "╚════════════════════════════════════════════════╝" -ForegroundColor Cyan
+
+$cycleCount = 0
+
+while ($true) {
+    $cycleCount++
+    
+    $coreRpm = Get-RPM $coreRpmPath
+    $mainRpm = Get-RPM $mainRpmPath
+    $subAvgRpm = Get-SubTurbine-Avg
+    
+    # Check for impulses
+    $impulses = Get-ChildItem -Path $inboxPath -Filter "impulse_*.json" -ErrorAction SilentlyContinue
+    $impulseCount = 0
+    foreach ($impulse in $impulses) {
+        $impulseCount++
+        Remove-Item $impulse.FullName -Force
+    }
+    
+    # Apply impulse boost (adds to current, doesn't replace)
+    if ($impulseCount -gt 0) {
+        $coreRpm = [Math]::Min($coreRpm + ($impulseCount * $impulseBoostCore), $maxCoreRpm)
+        $mainRpm = [Math]::Min($mainRpm + ($impulseCount * $impulseBoostMain), $maxMainRpm)
+        $newSubAvg = [Math]::Min($subAvgRpm + ($impulseCount * $impulseBoostSub), $maxSubRpm)
+        Set-All-SubTurbines $newSubAvg
+        $subAvgRpm = Get-SubTurbine-Avg
+        
+        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] IMPULSE x$impulseCount → Core=$coreRpm, Main=$mainRpm, Sub=$subAvgRpm" -ForegroundColor Yellow
+    }
+    
+    # ENGINE RECOVERY - Gently return toward idle (not 0)
+    $coreTarget = $idleCoreRpm
+    $mainTarget = $idleMainRpm
+    $subTarget = $idleSubRpm
+    
+    # If above idle, decay toward idle
+    if ($coreRpm -gt $idleCoreRpm) {
+        $coreRpm = [Math]::Max($idleCoreRpm, [Math]::Floor($coreRpm - ($coreRpm - $idleCoreRpm) * $decayRate))
+    } elseif ($coreRpm -lt $idleCoreRpm) {
+        $coreRpm = [Math]::Min($idleCoreRpm, [Math]::Floor($coreRpm + ($idleCoreRpm - $coreRpm) * $recoveryRate))
+    }
+    
+    if ($mainRpm -gt $idleMainRpm) {
+        $mainRpm = [Math]::Max($idleMainRpm, [Math]::Floor($mainRpm - ($mainRpm - $idleMainRpm) * $decayRate))
+    } elseif ($mainRpm -lt $idleMainRpm) {
+        $mainRpm = [Math]::Min($idleMainRpm, [Math]::Floor($mainRpm + ($idleMainRpm - $mainRpm) * $recoveryRate))
+    }
+    
+    # Sub-turbines recover toward idle
+    $newSubTarget = $idleSubRpm
+    if ($subAvgRpm -gt $idleSubRpm) {
+        $newSubAvg = [Math]::Max($idleSubRpm, [Math]::Floor($subAvgRpm - ($subAvgRpm - $idleSubRpm) * $decayRate))
+    } else {
+        $newSubAvg = [Math]::Min($idleSubRpm, [Math]::Floor($subAvgRpm + ($idleSubRpm - $subAvgRpm) * $recoveryRate))
+    }
+    Set-All-SubTurbines $newSubAvg
+    $subAvgRpm = Get-SubTurbine-Avg
+    
+    # Write values
+    Set-RPM $coreRpmPath $coreRpm $maxCoreRpm
+    Set-RPM $mainRpmPath $mainRpm $maxMainRpm
+    
+    # Log every 5 cycles (25 seconds) to reduce noise
+    if ($cycleCount % 5 -eq 0) {
+        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Idle: Core=$coreRpm, Main=$mainRpm, Sub=$subAvgRpm" -ForegroundColor Gray
+    }
+    
+    Start-Sleep -Seconds 5
+}

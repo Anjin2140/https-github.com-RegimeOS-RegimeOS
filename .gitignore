@@ -1,0 +1,22 @@
+# RegimeOS Git Ignore file
+# Ignore log outputs
+logs/
+*.log
+
+# Ignore backups
+backups/
+
+# Ignore runtime mailbox queues and external inputs
+adams_sierpinski/inbox/*
+external/ingress/*
+
+# Ignore egress directories
+core_geodisc/egress/validated/*
+core_geodisc/egress/idle/*
+core_geodisc/egress/waste/*
+waste_exfil/*
+
+# Ignore dynamic turbine RPM states
+core_geodisc/velocity/rpm.md
+turbine_main/rotor/velocity/rpm.md
+turbine_sub/*/velocity/rpm.md

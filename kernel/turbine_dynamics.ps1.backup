@@ -1,0 +1,74 @@
+﻿# Turbine Dynamics Daemon - PowerShell Native
+# RegimeOS v4.1-Windows | Phase 2
+# Encoding: UTF-8 No BOM
+
+$coreRpmPath = "C:\RegimeOS\core_geodisc\velocity\rpm.md"
+$mainRpmPath = "C:\RegimeOS\turbine_main\rotor\velocity\rpm.md"
+$subRpmPath = "C:\RegimeOS\turbine_sub\sub_turbine_01\velocity\rpm.md"
+$inboxPath = "C:\RegimeOS\adams_sierpinski\inbox\"
+$decayRate = 1
+$decayInterval = 5
+
+# Initialize RPM values if files don't exist
+function Initialize-RPM {
+    param($path, $initialValue, $maxValue)
+    if (!(Test-Path $path)) {
+        $dir = Split-Path $path -Parent
+        if (!(Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        "$initialValue / $maxValue" | Out-File -FilePath $path -Encoding UTF8
+    }
+}
+
+Initialize-RPM $coreRpmPath 20 2000
+Initialize-RPM $mainRpmPath 10 1000
+Initialize-RPM $subRpmPath 5 500
+
+# Read RPM from file
+function Get-RPM {
+    param($path)
+    $content = Get-Content $path -Raw
+    ($content -split ' / ')[0] -as [int]
+}
+
+# Write RPM to file
+function Set-RPM {
+    param($path, $value, $max)
+    "$value / $max" | Out-File -FilePath $path -Encoding UTF8
+}
+
+Write-Host "╔════════════════════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "║  Turbine Dynamics Daemon - STARTED             ║" -ForegroundColor Cyan
+Write-Host "╠════════════════════════════════════════════════╣" -ForegroundColor Cyan
+Write-Host "║  Decay Rate:       -$decayRate RPM per $decayInterval seconds           ║" -ForegroundColor Green
+Write-Host "║  Inbox Monitor:    $inboxPath" -ForegroundColor Green
+Write-Host "║  Status:           RUNNING                       ║" -ForegroundColor Green
+Write-Host "╚════════════════════════════════════════════════╝" -ForegroundColor Cyan
+
+while ($true) {
+    # Check for impulses
+    $impulses = Get-ChildItem -Path $inboxPath -Filter "impulse_*.json" -ErrorAction SilentlyContinue
+    foreach ($impulse in $impulses) {
+        $coreRpm = Get-RPM $coreRpmPath
+        $newRpm = [Math]::Min($coreRpm + 5, 2000)
+        Set-RPM $coreRpmPath $newRpm 2000
+        Remove-Item $impulse.FullName -Force
+        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Impulse detected (+5 RPM) → $newRpm" -ForegroundColor Yellow
+    }
+    
+    # Apply decay to all turbines
+    $coreRpm = Get-RPM $coreRpmPath
+    $mainRpm = Get-RPM $mainRpmPath
+    $subRpm = Get-RPM $subRpmPath
+    
+    $newCore = [Math]::Max(0, $coreRpm - $decayRate)
+    $newMain = [Math]::Max(0, $mainRpm - $decayRate)
+    $newSub = [Math]::Max(0, $subRpm - $decayRate)
+    
+    Set-RPM $coreRpmPath $newCore 2000
+    Set-RPM $mainRpmPath $newMain 1000
+    Set-RPM $subRpmPath $newSub 500
+    
+    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Decay applied: Core=$newCore, Main=$newMain, Sub=$newSub" -ForegroundColor Gray
+    
+    Start-Sleep -Seconds $decayInterval
+}
