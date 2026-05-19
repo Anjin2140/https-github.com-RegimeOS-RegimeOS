@@ -15,6 +15,9 @@ class ArchitectAnchor:
         """
         Clamps value strictly to the absolute physical bounds [NEGATIVE_VOID, POSITIVE_CRYSTAL].
         """
+        import math
+        if math.isnan(value):
+            return 0.0
         if value < ArchitectAnchor.NEGATIVE_VOID:
             return float(ArchitectAnchor.NEGATIVE_VOID)
         if value > ArchitectAnchor.POSITIVE_CRYSTAL:
