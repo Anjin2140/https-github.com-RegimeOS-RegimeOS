@@ -1,0 +1,10 @@
+{
+    "turbine_count": 32,
+    "epsilon": "1e-13",
+    "max_log_size_kb": 10,
+    "autoboot_status": true,
+    "alert_discord_webhook": "",
+    "alert_email_recipient": "",
+    "alert_email_smtp_server": "",
+    "alert_email_smtp_port": 587
+}

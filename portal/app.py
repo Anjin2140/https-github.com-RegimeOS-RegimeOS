@@ -21,7 +21,11 @@ if not os.path.exists(CONFIG_FILE):
         "turbine_count": 32,
         "epsilon": "1e-13",
         "max_log_size_kb": 10,
-        "autoboot_status": True
+        "autoboot_status": True,
+        "alert_discord_webhook": "",
+        "alert_email_recipient": "",
+        "alert_email_smtp_server": "",
+        "alert_email_smtp_port": 587
     }
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
     with open(CONFIG_FILE, "w") as f:
@@ -312,6 +316,10 @@ def api_config():
         epsilon = data.get("epsilon")
         max_log_size_kb = data.get("max_log_size_kb")
         autoboot_status = data.get("autoboot_status")
+        alert_discord_webhook = data.get("alert_discord_webhook", "")
+        alert_email_recipient = data.get("alert_email_recipient", "")
+        alert_email_smtp_server = data.get("alert_email_smtp_server", "")
+        alert_email_smtp_port = data.get("alert_email_smtp_port", 587)
         
         # Validation checks
         if not (16 <= turbine_count <= 32):
@@ -322,11 +330,20 @@ def api_config():
         except ValueError:
             return jsonify({"error": "Epsilon tolerance must be a numeric value"}), 400
             
+        try:
+            alert_email_smtp_port = int(alert_email_smtp_port)
+        except ValueError:
+            return jsonify({"error": "SMTP port must be an integer"}), 400
+            
         updated_config = {
             "turbine_count": turbine_count,
             "epsilon": epsilon,
             "max_log_size_kb": max_log_size_kb,
-            "autoboot_status": autoboot_status
+            "autoboot_status": autoboot_status,
+            "alert_discord_webhook": alert_discord_webhook,
+            "alert_email_recipient": alert_email_recipient,
+            "alert_email_smtp_server": alert_email_smtp_server,
+            "alert_email_smtp_port": alert_email_smtp_port
         }
         
         with open(CONFIG_FILE, "w") as f:
