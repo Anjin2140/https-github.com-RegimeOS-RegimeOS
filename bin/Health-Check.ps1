@@ -5,7 +5,11 @@ if (Test-Path $coreRpmPath) {
     $coreRpm = ($c -split ' / ')[0] -as [int]
 }
 $status = "healthy"
-if ($coreRpm -le 0) { $status = "warning" }
+# Verify if the single-core engine process is running
+$engineProc = Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe' and CommandLine like '%single-core.ps1%'"
+if (-not $engineProc) {
+    $status = "critical"
+}
 
 $health = [PSCustomObject]@{
     status = $status
