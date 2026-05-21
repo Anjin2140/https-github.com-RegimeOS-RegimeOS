@@ -1,0 +1,11 @@
+C:\RegimeOS\language\anaconda\src\kernel\bin\Debug\net10.0\Anaconda.Kernel.deps.json
+C:\RegimeOS\language\anaconda\src\kernel\bin\Debug\net10.0\Anaconda.Kernel.dll
+C:\RegimeOS\language\anaconda\src\kernel\bin\Debug\net10.0\Anaconda.Kernel.pdb
+C:\RegimeOS\language\anaconda\src\kernel\obj\Debug\net10.0\Anaconda.Kernel.GeneratedMSBuildEditorConfig.editorconfig
+C:\RegimeOS\language\anaconda\src\kernel\obj\Debug\net10.0\Anaconda.Kernel.AssemblyInfoInputs.cache
+C:\RegimeOS\language\anaconda\src\kernel\obj\Debug\net10.0\Anaconda.Kernel.AssemblyInfo.cs
+C:\RegimeOS\language\anaconda\src\kernel\obj\Debug\net10.0\Anaconda.Kernel.csproj.CoreCompileInputs.cache
+C:\RegimeOS\language\anaconda\src\kernel\obj\Debug\net10.0\Anaconda.Kernel.dll
+C:\RegimeOS\language\anaconda\src\kernel\obj\Debug\net10.0\refint\Anaconda.Kernel.dll
+C:\RegimeOS\language\anaconda\src\kernel\obj\Debug\net10.0\Anaconda.Kernel.pdb
+C:\RegimeOS\language\anaconda\src\kernel\obj\Debug\net10.0\ref\Anaconda.Kernel.dll

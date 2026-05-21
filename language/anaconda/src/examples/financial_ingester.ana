@@ -1,0 +1,180 @@
+# @capability: filesystem
+# @capability: network
+
+# financial_ingester.ana
+# Ported ANACONDA Secure Financial Ingestion Daemon
+
+import os
+import sys
+import time
+import json
+from src.stdlib.secure_sock import SecureSocket
+
+# Align sys.path for RegimeOS kernel & bin
+parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+if r"C:\RegimeOS\kernel" not in sys.path:
+    sys.path.insert(0, r"C:\RegimeOS\kernel")
+if r"C:\RegimeOS\bin" not in sys.path:
+    sys.path.insert(0, r"C:\RegimeOS\bin")
+
+try:
+    import regime_config
+    INBOX_DIR = os.path.join(regime_config.AS_DIAMONDS_PATH, "inbox")
+    UPGRADE_ENABLED = regime_config.AUTOPOIETIC_UPGRADE_ENABLED
+    MAX_GAS = regime_config.MAX_GAS_THRESHOLD_GWEI
+except ImportError:
+    base_dir = r"C:\RegimeOS"
+    INBOX_DIR = os.path.join(base_dir, "adams_sierpinski", "inbox")
+    UPGRADE_ENABLED = True
+    MAX_GAS = 5.0
+
+try:
+    from secret_manager import get_secret
+    RPC_URL = get_secret(None, "BASE_RPC_URL") or "https://mainnet.base.org"
+except ImportError:
+    RPC_URL = "https://mainnet.base.org"
+
+if not os.path.exists(INBOX_DIR):
+    os.makedirs(INBOX_DIR, exist_ok=True)
+
+def fetch_gas_price():
+    try:
+        print("[*] Fetching gas price from RPC via SecureSocket: " + str(RPC_URL))
+        # Parse Host, Port, and Path from RPC_URL
+        url_clean = RPC_URL
+        if url_clean.startswith("https://"):
+            url_clean = url_clean[8:]
+        elif url_clean.startswith("http://"):
+            url_clean = url_clean[7:]
+            
+        if "/" in url_clean:
+            host, path = url_clean.split("/", 1)
+            path = "/" + path
+        else:
+            host = url_clean
+            path = "/"
+            
+        port = 443
+        if ":" in host:
+            host, port_str = host.split(":", 1)
+            port = int(port_str)
+            
+        # Create SecureSocket (enforces TLS 1.3 + ChaCha20-Poly1305 + Header Stripping)
+        sock = SecureSocket()
+        sock.connect((host, port))
+        
+        # Build JSON-RPC payload
+        payload = json.dumps({
+            "jsonrpc": "2.0",
+            "method": "eth_gasPrice",
+            "params": [],
+            "id": 1
+        })
+        
+        # Prepare anonymous HTTP/1.1 request
+        req = (
+            "POST " + path + " HTTP/1.1\r\n"
+            "Host: " + host + "\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: " + str(len(payload)) + "\r\n"
+            "Connection: close\r\n\r\n"
+            + payload
+        )
+        
+        sock.sendall(req.encode('utf-8'))
+        
+        # Read the full HTTP response
+        resp = b""
+        while True:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            resp += chunk
+            
+        sock.close()
+        
+        # Split headers and body
+        parts = resp.split(b"\r\n\r\n", 1)
+        if len(parts) < 2:
+            raise ValueError("Invalid HTTP response headers")
+            
+        body = parts[1].decode('utf-8')
+        res_data = json.loads(body)
+        hex_gas = res_data["result"]
+        wei_gas = int(hex_gas, 16)
+        
+        # Return as RegimeDecimal
+        return float(wei_gas) / float(1000000000.0)
+    except Exception as e:
+        print("[!] RPC query failed: " + str(e) + ". Falling back to mock gas price.")
+        # Float constants will be transpiled to RegimeDecimal at compile time
+        return 1.25
+
+def run_once():
+    # Implicitly promotes boolean UPGRADE_ENABLED to Ternary
+    if not bool(UPGRADE_ENABLED):
+        print("[!] Autopoietic upgrades disabled in config. Exiting.")
+        return FALSE
+
+    gwei_gas = fetch_gas_price()
+    max_gas_regime = float(MAX_GAS)
+    
+    print("[+] Current Gas Price: " + str(gwei_gas) + " Gwei (Limit Threshold: " + str(max_gas_regime) + " Gwei)")
+
+    # Execute precise mathematical checks using RegimeDecimal operators
+    if gwei_gas > max_gas_regime:
+        state = -1
+        rpm_boost = 0
+        status_msg = "HIGH GAS - THROTTLE ENGAGED (Annihilation / Decay)"
+    elif gwei_gas < (max_gas_regime * 0.6):
+        state = 1
+        rpm_boost = 20
+        status_msg = "LOW GAS - ACCELERATING TXS (Synthesis / Boost)"
+    else:
+        state = 0
+        rpm_boost = 5
+        status_msg = "STABLE GAS - BALANCED LOAD (Balancer / Maintenance)"
+
+    timestamp = time.strftime("%Y%m%d%H%M%S")
+    filename = "impulse_vaas_key_adams_premium_9921_financial_" + str(timestamp) + ".json"
+    filepath = os.path.join(INBOX_DIR, filename)
+
+    # Convert boosts and states to standard python types for output JSON compatibility
+    payload = {
+        "signature": "ARMADA_VALID",
+        "source": "financial_ingester",
+        "timestamp": timestamp,
+        "gas_price_gwei": gwei_gas.to_float() if hasattr(gwei_gas, "to_float") else gwei_gas,
+        "workload": "FINANCIAL_LEDGER_ACCELERATION",
+        "rpm_boost": int(rpm_boost),
+        "tri_polar_state": int(state)
+    }
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=4)
+
+    print("[+] Enqueued " + str(filename))
+    print("[+] Status: " + str(status_msg) + " | Boost: " + str(rpm_boost) + " RPM")
+    return TRUE
+
+def main():
+    print("=== STARTING FINANCIAL LEDGER INGESTER ===")
+    daemon_mode = os.environ.get("DAEMON_MODE", "false").lower() == "true"
+    
+    if daemon_mode:
+        print("[*] Running in continuous daemon mode...")
+        import builtins
+        poll_interval = builtins.float(os.environ.get("POLL_INTERVAL", "30.0"))
+        try:
+            while True:
+                run_once()
+                time.sleep(poll_interval)
+        except KeyboardInterrupt:
+            print("[*] Daemon stopped by keyboard interrupt.")
+    else:
+        run_once()
+
+if __name__ in ("__main__", "__anaconda_secure__"):
+    main()

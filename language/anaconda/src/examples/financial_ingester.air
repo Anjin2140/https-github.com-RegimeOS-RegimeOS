@@ -1,0 +1,138 @@
+# @capability: filesystem
+# @capability: network
+# Transpiled by ANACONDA Forge v1.0
+import sys
+if r'C:\RegimeOS\language\anaconda' not in sys.path:
+    sys.path.insert(0, r'C:\RegimeOS\language\anaconda')
+from src.kernel.regime_math import Ternary, RegimeDecimal, HahnDecimal
+
+# Verify execution authorization
+if __name__ == "__anaconda_secure__":
+    try:
+        from src.compiler.vault import verify_air_signature
+        if not verify_air_signature(__file__):
+            print("EXIT_CODE_SECURITY_VIOLATION")
+            sys.exit(99)
+    except Exception:
+        print("EXIT_CODE_SECURITY_VIOLATION")
+        sys.exit(99)
+
+import os
+import sys
+import time
+import json
+from src.stdlib.secure_sock import SecureSocket
+parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+if 'C:\\RegimeOS\\kernel' not in sys.path:
+    sys.path.insert(0, 'C:\\RegimeOS\\kernel')
+if 'C:\\RegimeOS\\bin' not in sys.path:
+    sys.path.insert(0, 'C:\\RegimeOS\\bin')
+try:
+    import regime_config
+    INBOX_DIR = os.path.join(regime_config.AS_DIAMONDS_PATH, 'inbox')
+    UPGRADE_ENABLED = regime_config.AUTOPOIETIC_UPGRADE_ENABLED
+    MAX_GAS = regime_config.MAX_GAS_THRESHOLD_GWEI
+except ImportError:
+    base_dir = 'C:\\RegimeOS'
+    INBOX_DIR = os.path.join(base_dir, 'adams_sierpinski', 'inbox')
+    UPGRADE_ENABLED = Ternary(1)
+    MAX_GAS = RegimeDecimal.from_str('5.0')
+try:
+    from secret_manager import get_secret
+    RPC_URL = get_secret(Ternary(0), 'BASE_RPC_URL') or 'https://mainnet.base.org'
+except ImportError:
+    RPC_URL = 'https://mainnet.base.org'
+if not os.path.exists(INBOX_DIR):
+    os.makedirs(INBOX_DIR, exist_ok=Ternary(1))
+
+def fetch_gas_price():
+    try:
+        print('[*] Fetching gas price from RPC via SecureSocket: ' + str(RPC_URL))
+        url_clean = RPC_URL
+        if url_clean.startswith('https://'):
+            url_clean = url_clean[8:]
+        elif url_clean.startswith('http://'):
+            url_clean = url_clean[7:]
+        if '/' in url_clean:
+            host, path = url_clean.split('/', 1)
+            path = '/' + path
+        else:
+            host = url_clean
+            path = '/'
+        port = 443
+        if ':' in host:
+            host, port_str = host.split(':', 1)
+            port = int(port_str)
+        sock = SecureSocket()
+        sock.connect((host, port))
+        payload = json.dumps({'jsonrpc': '2.0', 'method': 'eth_gasPrice', 'params': [], 'id': 1})
+        req = 'POST ' + path + ' HTTP/1.1\r\nHost: ' + host + '\r\nContent-Type: application/json\r\nContent-Length: ' + str(len(payload)) + '\r\nConnection: close\r\n\r\n' + payload
+        sock.sendall(req.encode('utf-8'))
+        resp = b''
+        while Ternary(1):
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            resp += chunk
+        sock.close()
+        parts = resp.split(b'\r\n\r\n', 1)
+        if len(parts) < 2:
+            raise ValueError('Invalid HTTP response headers')
+        body = parts[1].decode('utf-8')
+        res_data = json.loads(body)
+        hex_gas = res_data['result']
+        wei_gas = int(hex_gas, 16)
+        return RegimeDecimal.from_float(wei_gas) / RegimeDecimal.from_float(1000000000.0)
+    except Exception as e:
+        print('[!] RPC query failed: ' + str(e) + '. Falling back to mock gas price.')
+        return RegimeDecimal.from_str('1.25')
+
+def run_once():
+    if not Ternary(UPGRADE_ENABLED):
+        print('[!] Autopoietic upgrades disabled in config. Exiting.')
+        return Ternary(-1)
+    gwei_gas = fetch_gas_price()
+    max_gas_regime = RegimeDecimal.from_float(MAX_GAS)
+    print('[+] Current Gas Price: ' + str(gwei_gas) + ' Gwei (Limit Threshold: ' + str(max_gas_regime) + ' Gwei)')
+    if gwei_gas > max_gas_regime:
+        state = -1
+        rpm_boost = 0
+        status_msg = 'HIGH GAS - THROTTLE ENGAGED (Annihilation / Decay)'
+    elif gwei_gas < max_gas_regime * RegimeDecimal.from_str('0.6'):
+        state = 1
+        rpm_boost = 20
+        status_msg = 'LOW GAS - ACCELERATING TXS (Synthesis / Boost)'
+    else:
+        state = 0
+        rpm_boost = 5
+        status_msg = 'STABLE GAS - BALANCED LOAD (Balancer / Maintenance)'
+    timestamp = time.strftime('%Y%m%d%H%M%S')
+    filename = 'impulse_vaas_key_adams_premium_9921_financial_' + str(timestamp) + '.json'
+    filepath = os.path.join(INBOX_DIR, filename)
+    payload = {'signature': 'ARMADA_VALID', 'source': 'financial_ingester', 'timestamp': timestamp, 'gas_price_gwei': gwei_gas.to_float() if hasattr(gwei_gas, 'to_float') else gwei_gas, 'workload': 'FINANCIAL_LEDGER_ACCELERATION', 'rpm_boost': int(rpm_boost), 'tri_polar_state': int(state)}
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, indent=4)
+    print('[+] Enqueued ' + str(filename))
+    print('[+] Status: ' + str(status_msg) + ' | Boost: ' + str(rpm_boost) + ' RPM')
+    return Ternary(1)
+
+def main():
+    print('=== STARTING FINANCIAL LEDGER INGESTER ===')
+    daemon_mode = os.environ.get('DAEMON_MODE', 'false').lower() == 'true'
+    if daemon_mode:
+        print('[*] Running in continuous daemon mode...')
+        import builtins
+        poll_interval = builtins.float(os.environ.get('POLL_INTERVAL', '30.0'))
+        try:
+            while Ternary(1):
+                run_once()
+                time.sleep(poll_interval)
+        except KeyboardInterrupt:
+            print('[*] Daemon stopped by keyboard interrupt.')
+    else:
+        run_once()
+if __name__ in ('__main__', '__anaconda_secure__'):
+    main()
+# SIGNATURE: 5727b8d6af51899f912ab4db741f86fd5f0589929bd491e18d7de7aa4ebf1ad5465ddb054de05fd13ce1bafb451fa57271a3ba3f6618632da670c4ca4f774e06
