@@ -1,0 +1,7 @@
+# ANACONDA Local Git Ignore
+keys/*.pem
+__pycache__/
+*.pyc
+*.pyo
+*.air
+stress_test_log.md
